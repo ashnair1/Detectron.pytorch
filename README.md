@@ -20,7 +20,7 @@
 
 </div>
 
-**This code follows the implementation architecture of Detectron.** Only part of the functionality is supported. Check [this section](#supported-network-modules) for more information.
+**This code follows the implementation architecture of Detectron.** Only part of the functionality is supported. Check [this section](#supported-network-modules) for more information. This code now supports **PyTorch 1.0** and **TorchVision 0.3**.
 
 With this code, you can...
 
@@ -37,7 +37,7 @@ This implementation has the following features:
 
 - **It supports multiple GPUs training**.
 
-- **It supports three pooling methods**. Notice that only **roi align** is revised to match the implementation in Caffe2. So, use it.
+- **It supports two pooling methods**. Notice that only **roi align** is revised to match the implementation in Caffe2. So, use it.
 
 - **It is memory efficient**. For data batching, there are two techiniques available to reduce memory usage: 1) *Aspect grouping*: group images with similar aspect ratio in a batch 2) *Aspect cropping*: crop images that are too long. Aspect grouping is implemented in Detectron, so it's used for default. Aspect cropping is the idea from [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch), and it's not used for default.
 
@@ -48,6 +48,9 @@ This implementation has the following features:
 - (2018/05/25) Support ResNeXt backbones.
 - (2018/05/22) Add group normalization baselines.
 - (2018/05/15) PyTorch0.4 is supported now !
+- (2019/08/28) Support PASCAL VOC and Custom Dataset
+- (2019/01/17) **PyTorch 1.0 Supported now!**
+- (2019/05/30) Code rebased on **TorchVision 0.3**. Compilation is now optional!
 
 ## Getting Started
 Clone the repo:
@@ -61,9 +64,9 @@ git clone https://github.com/roytseng-tw/mask-rcnn.pytorch.git
 Tested under python3.
 
 - python packages
-  - pytorch>=0.3.1
-  - torchvision>=0.2.0
-  - cython
+  - pytorch>=1.0.0
+  - torchvision>=0.3.0
+  - cython>=0.29.2
   - matplotlib
   - numpy
   - scipy
@@ -72,10 +75,10 @@ Tested under python3.
   - packaging
   - [pycocotools](https://github.com/cocodataset/cocoapi)  — for COCO dataset, also available from pip.
   - tensorboardX  — for logging the losses in Tensorboard
-- An NVIDAI GPU and CUDA 8.0 or higher. Some operations only have gpu implementation.
+- An NVIDIA GPU and CUDA 8.0 or higher. Some operations only have gpu implementation.
 - **NOTICE**: different versions of Pytorch package have different memory usages.
 
-### Compilation
+### Compilation [Optional]
 
 Compile the CUDA code:
 
@@ -84,9 +87,7 @@ cd lib  # please change to this directory
 sh make.sh
 ```
 
-If your are using Volta GPUs, uncomment this [line](https://github.com/roytseng-tw/mask-rcnn.pytorch/tree/master/lib/make.sh#L15) in `lib/mask.sh` and remember to postpend a backslash at the line above. `CUDA_PATH` defaults to `/usr/loca/cuda`. If you want to use a CUDA library on different path, change this [line](https://github.com/roytseng-tw/mask-rcnn.pytorch/tree/master/lib/make.sh#L3) accordingly.
-
-It will compile all the modules you need, including NMS, ROI_Pooing, ROI_Crop and ROI_Align. (Actually gpu nms is never used ...)
+It will compile all the modules you need, including NMS. (Actually gpu nms is never used ...)
 
 Note that, If you use `CUDA_VISIBLE_DEVICES` to set gpus, **make sure at least one gpu is visible when compile the code.**
 
@@ -118,7 +119,7 @@ mkdir data
       ├── train2014
       ├── train2017
       ├── val2014
-      ├──val2017
+      ├── val2017
       ├── ...
   ```
   Download coco mini annotations from [here](https://s3-us-west-2.amazonaws.com/detectron/coco/coco_annotations_minival.tgz).
@@ -129,8 +130,40 @@ mkdir data
    ```
    ln -s path/to/coco data/coco
    ```
+   
+- **PASCAL VOC 2007 + 12**
+  Please follow the instructions in [py-faster-rcnn](https://github.com/rbgirshick/py-faster-rcnn#beyond-the-demo-installation-for-training-and-testing-models) to prepare VOC datasets. Actually, you can refer to any others. After downloading the data, creat softlinks in the `data/VOC<year>` folder as folows,
+  ```
+  VOCdevkitPATH=/path/to/voc_devkit
+  mkdir -p $DETECTRON/detectron/datasets/data/VOC<year>
+  ln -s /${VOCdevkitPATH}/VOC<year>/JPEGImages $DETECTRON.PYTORCH/data/VOC<year>/JPEGImages
+  ln -s /${VOCdevkitPATH}/VOC<year>/json_annotations $DETECTRON.PYTORCH/data/VOC<year>/annotations
+  ln -s /${VOCdevkitPATH} $DETECTRON.PYTORCH/data/VOC<year>/VOCdevkit<year>
+  ```
+  The directory structure of `JPEGImages` and `annotations` should be as follows,
+  ```
+  VOC<year>
+  ├── annotations
+  |   ├── train.json
+  │   ├── trainval.json
+  │   ├── test.json
+  │   ├── ...
+  |
+  └── JPEGImages
+      ├── <im-1-name>.jpg
+      ├── ...
+      ├── <im-N-name>.jpg
+  ```
+  **NOTE:** The `annotations` folder requires you to have PASCAL VOC annotations in COCO json format, which is available for download [here](https://storage.googleapis.com/coco-dataset/external/PASCAL_VOC.zip). You can also convert the XML annotatinos files to JSON by running the following script,
+  ```
+  python tools/pascal_voc_xml2coco_json_converter.py $VOCdevkitPATH $year
+  ```
+  (In order to succesfully run the script above, you need to update the full path to the respective folders in the script).
+  
+- **Custom Dataset**
+  Similar to above, create a directory named `CustomDataset` in the `data` folder and add symlinks to the `annotations` directory and `JPEGImages` as shown for Pascal Voc dataset. You also need to link the custom dataset devkit to `CustomDataDevkit`.
 
-  Recommend to put the images on a SSD for possible better training performance
+Recommend to put the images on a SSD for possible better training performance
 
 ### Pretrained Model
 
@@ -202,7 +235,11 @@ Use `--bs` to overwrite the default batch size to a proper value that fits into 
 
 Specify `—-use_tfboard` to log the losses on Tensorboard.
 
-**NOTE**: use `--dataset keypoints_coco2017` when training for keypoint-rcnn.
+**NOTE**: 
+  - use `--dataset keypoints_coco2017` when training for keypoint-rcnn.
+  - use `--dataset voc2007` when training for PASCAL VOC 2007.
+  - use `--dataset voc2012` when training for PASCAL VOC 2012.
+  - use `--dataset custom_dataset --num_classes $NUM_CLASSES` when training for your custom dataset. Here, `$NUM_CLASSES` is the number of object classes **+ 1** (for background class) present in your custom dataset.
 
 ### The use of `--iter_size`
 As in Caffe, update network once (`optimizer.step()`) every `iter_size` iterations (forward + backward). This way to have a larger effective batch size for training. Notice that, step count is only increased after network update.
